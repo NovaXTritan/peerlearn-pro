@@ -50,3 +50,9 @@ a { color:var(--brand); text-decoration:none; }
 .pill { padding:8px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:var(--pill); color:var(--text); }
 input, textarea { width:100%; background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.18); padding:10px 12px; border-radius:12px; }
 ul { list-style:none; padding:0; margin:0; }
+
+/* helpers used by Auth page */
+.col { display:flex; flex-direction:column; gap:10px; }
+.field { width:100%; background:transparent; color:var(--text);
+         border:1px solid rgba(255,255,255,.18); padding:10px 12px; border-radius:12px; }
+
