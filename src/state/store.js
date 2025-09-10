@@ -1,118 +1,160 @@
 import { create } from 'zustand'
 
-const LS_KEY = 'peerlearn-pro-state'
-const load = () => {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || null } catch { return null }
-}
-const persist = (state) => {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(state)) } catch {}
-}
+const read = (k, v)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? v } catch{ return v } }
+const write = (k,v)=> localStorage.setItem(k, JSON.stringify(v))
 
-const DEFAULT_PODS = [
-  'Consulting','Finance','Data Science','Marketing','Product Management','Operations','Strategy','HR','Analytics','Social Impact','EdTech','Banking','Investment','Entrepreneurship'
-].map((name, i)=>({
-  id: 'pod-'+(i+1), name, members: [], rules: 'Be kind. Specific pledges. Weekly proof.',
-  activity: Math.floor(Math.random()*8)+2, // posts/week
-  events: Math.random()>.5?1:0,
-  mentors: Math.random()>.5?['Stellar Mentor']:[],
-  feed: [
-    {id:'f1', type:'pledge', by:'Maya', text:'Finish 20 problems tonight', ts: Date.now()-36e5*6},
-    {id:'f2', type:'proof',  by:'Arjun', text:'Posted project summary', ts: Date.now()-36e5*2}
-  ]
-}))
-
-const defaultState = {
-  auth: { authed: false, email:'', verified:false },
-  profile: {
-    onboarded:false,
-    name:'', college:'', gradYear:'', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    headline:'', goals:['Product Management'], skills:['SQL','Excel'], availability:'Tue 7-8pm', linkedin:{ url:'', headline:'', skills:[], visible:{profile:true, pods:true, posts:false}},
-    privacy:{ journalsPrivate:true, allowAnon:true },
-    theme:'dark'
-  },
-  pods: { all: DEFAULT_PODS, joined: [] },
-  matches: { suggested: [], crews: [] },
-  journal: [],
-  events: [{id:'e1', title:'PM Resume Clinic', ts: Date.now()+86400000, host:'Stellar Mentor', pod:'Product Management', rsvps:0}],
-  townhall: [{id:'t1', type:'announcement', author:'Admin', text:'Welcome to PeerLearn!', ts: Date.now()-86400000}],
-  analytics: { streak:0, freezeArmed:false, freezeUsedThisWeek:false, retrieval:[] },
-  dms: { byThread: {} }
-}
+const uid = () => Math.random().toString(36).slice(2)
+const now = () => new Date().toISOString()
+const todayStr = () => new Date().toDateString()
 
 export const useStore = create((set, get)=>({
-  ... (load() || defaultState),
+  // --- profile/auth ---
+  auth: read('auth', { authed:false, userId:null }),
+  profile: read('profile', { onboarded:false, name:'', bio:'', tags:['react','finance'], theme:'dark' }),
 
-  _persist: ()=>persist(get()),
+  // --- data ---
+  pods: read('pods', [{ id:'p1', name:'Starter Pod', about:'Default pod', members:[], posts:[] }]),
+  membership: read('membership', { podIds: [] }),
+  journal: read('journal', []),
+  events: read('events', [ { id:'e1', title:'Welcome Session', when: new Date(Date.now()+864e5).toISOString(), podId:null, rsvps:[] } ]),
+  townhall: read('townhall', [ { id: uid(), user:'System', msg:'Welcome to PeerLearn!', at: now() } ]),
+  matches: read('matches', []),
+  activity: read('activity', { streak:0, lastDay: todayStr(), reviews:[], goalsDone:[] }),
 
-  // Auth
-  requestOTP: (email)=>{
-    set(s=>({auth:{...s.auth, email}})); get()._persist(); return '000000'; // static code for MVP
-  },
-  verifyOTP: (code)=>{
-    const ok = code==='000000'
-    set(s=>({auth:{...s.auth, authed: ok, verified: ok}})); get()._persist(); return ok
-  },
-  signOut: ()=>{ set(()=>defaultState); get()._persist(); },
+  // helpers
+  me(){ const {auth, profile} = get(); return auth.authed ? { id: auth.userId, name: profile.name || 'You' } : null },
 
-  completeOnboarding: (patch)=>{
-    set(s=>({profile:{...s.profile, ...patch, onboarded:true}})); get()._persist();
-  },
+  // --- Auth / Onboarding
+  signIn:(name='Guest')=> set(s=>{
+    const auth = { authed:true, userId: s.auth.userId || uid() }
+    const profile = { ...s.profile, name }
+    write('auth', auth); write('profile', profile)
+    return { auth, profile }
+  }),
+  signOut: ()=> set(()=>{ const a={authed:false, userId:null}; write('auth',a); return {auth:a} }),
+  completeOnboarding:(bio, tags)=> set(s=>{
+    const profile = { ...s.profile, onboarded:true, bio, tags }
+    write('profile', profile); return { profile }
+  }),
+  setTheme:(t)=> set(s=>{ const profile={...s.profile, theme:t}; write('profile',profile); return {profile} }),
 
-  // Pods
-  joinPod: (podId)=>{
-    set(s=>{
-      const pod = s.pods.all.find(p=>p.id===podId)
-      if (!pod) return {}
-      const joined = [...new Set([...s.pods.joined, podId])]
-      return { pods: {...s.pods, joined } }
-    }); get()._persist();
-  },
-  leavePod: (podId)=>{
-    set(s=>({ pods: {...s.pods, joined: s.pods.joined.filter(id=>id!==podId)} })); get()._persist();
-  },
-  postToPod: (podId, entry)=>{
-    set(s=>{
-      const all = s.pods.all.map(p=> p.id===podId ? {...p, feed:[...p.feed, {...entry, id:'f'+Date.now()}]} : p)
-      return { pods:{...s.pods, all} }
-    }); get()._persist();
-  },
+  // --- Pods
+  createPod:(name, about='')=> set(s=>{
+    if(!name?.trim()) return {}
+    const pod = { id: uid(), name: name.trim(), about: (about||'').trim(), members:[get().me()?.id], posts:[] }
+    const pods = [...s.pods, pod]
+    const membership = { podIds:[...new Set([...s.membership.podIds, pod.id])] }
+    write('pods', pods); write('membership', membership)
+    return { pods, membership }
+  }),
+  joinPod:(podId)=> set(s=>{
+    const me = get().me()?.id; if(!me) return {}
+    const pods = s.pods.map(p => p.id===podId ? {...p, members:[...new Set([...(p.members||[]), me])]} : p)
+    const membership = { podIds:[...new Set([...s.membership.podIds, podId])] }
+    write('pods', pods); write('membership', membership)
+    return { pods, membership }
+  }),
+  postInPod:(podId, msg)=> set(s=>{
+    if(!msg?.trim()) return {}
+    const post = { id: uid(), user:get().me()?.name||'Anon', msg:msg.trim(), at: now() }
+    const pods = s.pods.map(p => p.id===podId ? {...p, posts:[post, ...(p.posts||[])]} : p)
+    write('pods', pods); return { pods }
+  }),
 
-  // Journal
-  addJournal: (entry)=>{
-    set(s=>({ journal:[{...entry, id:'j'+Date.now()}, ...s.journal] })); get()._persist();
-  },
+  // --- Journal
+  addJournal:(text, tags=[])=> set(s=>{
+    if(!text?.trim()) return {}
+    const entry = { id: uid(), createdAt: now(), text: text.trim(), tags }
+    const journal = [entry, ...s.journal]; write('journal', journal)
+    return { journal, activity: bumpDaily(s.activity, { reviews:0, goal:0, journal:1 }) }
+  }),
+  deleteJournal:(id)=> set(s=>{ const journal=s.journal.filter(j=>j.id!==id); write('journal',journal); return {journal} }),
 
-  // Matching
-  computeMatches: ()=>{
-    const userSkills = (get().profile.skills||[]).map(s=>s.toLowerCase())
-    const candidates = get().pods.all.flatMap(p=> p.members.length? p.members : [{id:'u1', name:'Maya', skills:['excel','sql']},{id:'u2', name:'Arjun', skills:['python','stats']}])
-    const scored = candidates.map(c=>({
-      ...c, score: c.skills.filter(s=>userSkills.includes(s.toLowerCase())).length
-    })).sort((a,b)=>b.score-a.score)
-    set(()=>({ matches:{ suggested: scored.slice(0,3), crews:[['You', 'Maya', 'Arjun']] }}))
-    get()._persist()
-  },
+  // --- Events
+  createEvent:(title, whenISO, podId=null)=> set(s=>{
+    if(!title?.trim() || !whenISO) return {}
+    const e = { id: uid(), title:title.trim(), when: new Date(whenISO).toISOString(), podId, rsvps: [get().me()?.id].filter(Boolean) }
+    const events = [e, ...s.events]; write('events', events); return { events }
+  }),
+  rsvp:(eventId, yes=true)=> set(s=>{
+    const me = get().me()?.id; if(!me) return {}
+    const events = s.events.map(e => e.id!==eventId ? e : ({...e, rsvps: yes ? [...new Set([...(e.rsvps||[]), me])] : (e.rsvps||[]).filter(x=>x!==me)}))
+    write('events', events); return { events }
+  }),
 
-  // Events
-  rsvp: (eventId)=>{
-    set(s=>({ events: s.events.map(e=> e.id===eventId? {...e, rsvps:(e.rsvps||0)+1}:e)})); get()._persist();
-  },
+  // --- Townhall
+  shout:(msg)=> set(s=>{
+    if(!msg?.trim()) return {}
+    const m = { id: uid(), user:get().me()?.name||'Anon', msg:msg.trim(), at: now() }
+    const townhall = [m, ...s.townhall]; write('townhall', townhall); return { townhall }
+  }),
 
-  // Analytics
-  markActive: ()=>{
-    const today = new Date().toISOString().slice(0,10)
-    const s = get().analytics
-    let newStreak = s.streak
-    if (s.lastActive === today) { /* no-op */ }
-    else if (!s.lastActive) newStreak = 1
-    else {
-      const diff = Math.round((new Date(today)-new Date(s.lastActive))/86400000)
-      if (diff===1) newStreak = s.streak+1
-      else if (diff>1 && s.freezeArmed && !s.freezeUsedThisWeek) { newStreak = s.streak+1; s.freezeArmed=false; s.freezeUsedThisWeek=true }
-      else newStreak = 1
+  // --- Matching (tags + journal bag-of-words simple score)
+  runMatching:()=> set(s=>{
+    const me = get().me()?.id; if(!me) return { matches: [] }
+    const myBag = buildBag(s.profile.tags, s.journal.map(j=>j.text))
+    const peers = new Map()
+    // derive peers by scanning pod members
+    s.pods.forEach(p => (p.members||[]).forEach(id => { if(id && id!==me) peers.set(id, { id, name:'Peer '+id.slice(-4), tags:[], texts:[] }) }))
+    // (if you later persist other users, fill their tags/texts similarly)
+    const matches = [...peers.values()].map(u=>{
+      const score = cosine(myBag, buildBag(u.tags, u.texts))
+      return {...u, score}
+    }).sort((a,b)=>b.score-a.score)
+    write('matches', matches); return { matches }
+  }),
+
+  // --- Analytics
+  incrementStreak:()=> set(s => ({ activity: bumpDaily(s.activity, { streakBump:1 }) })),
+  recordReview:(n=1)=> set(s => ({ activity: bumpDaily(s.activity, { reviews:n }) })),
+  recordGoalDone:()=> set(s => ({ activity: bumpDaily(s.activity, { goal:1 }) })),
+
+  // --- Settings
+  exportAll:()=>{
+    const keys=['auth','profile','pods','membership','journal','events','townhall','matches','activity']
+    const obj=Object.fromEntries(keys.map(k=>[k,get()[k]]))
+    const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'})
+    const url=URL.createObjectURL(blob); const a=document.createElement('a')
+    a.href=url; a.download='peerlearn-backup.json'; a.click(); URL.revokeObjectURL(url)
+  },
+  importAll: async (file)=>{
+    const text = await file.text()
+    let obj; try{ obj=JSON.parse(text) } catch{ alert('Invalid JSON'); return }
+    const allowed=['auth','profile','pods','membership','journal','events','townhall','matches','activity']
+    Object.keys(obj).forEach(k=> allowed.includes(k) && write(k, obj[k]))
+    set(Object.fromEntries(allowed.map(k=>[k, obj[k] ?? get()[k]])))
+  },
+  deleteAll:()=> set(()=>{
+    if(!confirm('Delete ALL local data? This cannot be undone.')) return {}
+    ['auth','profile','pods','membership','journal','events','townhall','matches','activity'].forEach(k=>localStorage.removeItem(k))
+    return {
+      auth:{authed:false,userId:null},
+      profile:{onboarded:false,name:'',bio:'',tags:[],theme:'dark'},
+      pods:[{ id:'p1', name:'Starter Pod', about:'Default pod', members:[], posts:[] }],
+      membership:{podIds:[]}, journal:[], events:[], townhall:[{id:uid(),user:'System',msg:'Reset',at:now()}],
+      matches:[], activity:{streak:0,lastDay:todayStr(),reviews:[],goalsDone:[]}
     }
-    set(state=>({ analytics:{...state.analytics, lastActive: today, streak:newStreak }})); get()._persist();
-  },
-  toggleFreeze: ()=>{ set(s=>({ analytics:{...s.analytics, freezeArmed: !s.analytics.freezeArmed} })); get()._persist(); },
-
+  }),
 }))
+
+// --- helpers
+function bumpDaily(activity, { streakBump=0, reviews=0, goal=0, journal=0 }){
+  const today = todayStr()
+  const consecutive = activity.lastDay===today ? activity.streak
+    : (new Date(activity.lastDay).getTime()+86400000 === new Date(today).getTime()) ? activity.streak+1 : 1
+  const rec = { day: today, reviews, journal, goal }
+  return { ...activity, lastDay: today, streak: consecutive + streakBump, reviews:[...activity.reviews, rec], goalsDone:[...activity.goalsDone, { day: today, n: goal }] }
+}
+function buildBag(tags=[], texts=[]){
+  const bag=new Map()
+  const add=(t,w=1)=> bag.set(t, (bag.get(t)||0)+w)
+  tags.forEach(t=> add(t.toLowerCase(), 2))
+  texts.join(' ').toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(x=>x.length>2).forEach(t=>add(t,1))
+  return bag
+}
+function cosine(a,b){
+  const keys=new Set([...a.keys(),...b.keys()])
+  let dot=0,na=0,nb=0
+  keys.forEach(k=>{ const x=a.get(k)||0, y=b.get(k)||0; dot+=x*y; na+=x*x; nb+=y*y })
+  return na&&nb ? dot/(Math.sqrt(na)*Math.sqrt(nb)) : 0
+}
