@@ -1,0 +1,52 @@
+/* src/styles/theme.css */
+
+/* Base tokens */
+:root {
+  --bg:#0b0b0c; --surface:#141518; --text:#e9eaf0; --muted:#a1a6b3;
+  --brand:#6ea8fe; --brand-2:#8cfccf; --card:var(--surface); --pill:#1d1f24;
+  --shadow:0 6px 18px rgba(0,0,0,.18); --radius:16px;
+}
+
+/* LIGHT */
+html.theme-light {
+  --bg:#f6f7f9; --surface:#ffffff; --text:#1a1b1f; --muted:#5b616e;
+  --brand:#1f6feb; --brand-2:#0cbcab; --pill:#e9ebef; --card:#ffffff;
+}
+
+/* DARK (default) */
+html.theme-dark {
+  --bg:#0b0b0c; --surface:#141518; --text:#e9eaf0; --muted:#a1a6b3;
+  --brand:#6ea8fe; --brand-2:#8cfccf; --pill:#1d1f24; --card:#141518;
+}
+
+/* GRADIENT */
+html.theme-gradient {
+  --bg:transparent; --surface:rgba(14,14,20,.72); --text:#f6f7fb; --muted:#cfd3de;
+  --brand:#b388ff; --brand-2:#7dd3fc; --pill:rgba(255,255,255,.08); --card:rgba(20,20,28,.72);
+  background: linear-gradient(135deg,#0ea5e9 0%,#a855f7 45%,#f43f5e 100%) fixed !important;
+}
+
+/* COSMOS */
+html.theme-cosmos {
+  --bg:transparent; --surface:rgba(11,12,18,.7); --text:#eaf3ff; --muted:#a8b4c7;
+  --brand:#7cc5ff; --brand-2:#ffd27c; --pill:rgba(255,255,255,.08); --card:rgba(18,20,30,.7);
+  background:
+    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.7), rgba(255,255,255,0) 60%),
+    radial-gradient(1px 1px at 80% 30%, rgba(255,255,255,.6), rgba(255,255,255,0) 60%),
+    radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,.5), rgba(255,255,255,0) 60%),
+    #060914 !important;
+  background-attachment: fixed !important;
+}
+
+/* Atoms */
+body { margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial; }
+a { color:var(--brand); text-decoration:none; }
+.muted { color:var(--muted); font-weight:500; }
+.row { display:flex; align-items:center; gap:10px; }
+.grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); }
+.card { background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
+.btn { background:var(--brand); color:#0b0b0c; border:0; border-radius:999px; padding:10px 14px; font-weight:700; cursor:pointer; }
+.btn.secondary { background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.15); }
+.pill { padding:8px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:var(--pill); color:var(--text); }
+input, textarea { width:100%; background:transparent; color:var(--text); border:1px solid rgba(255,255,255,.18); padding:10px 12px; border-radius:12px; }
+ul { list-style:none; padding:0; margin:0; }
