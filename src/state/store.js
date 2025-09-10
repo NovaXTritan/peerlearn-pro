@@ -1,230 +1,118 @@
-// src/state/store.js
 import { create } from 'zustand'
 
-/* ----------------------- helpers & persistence ----------------------- */
-const read  = (k, v) => { try { return JSON.parse(localStorage.getItem(k)) ?? v } catch { return v } }
-const write = (k, v) => localStorage.setItem(k, JSON.stringify(v))
-const uid   = () => Math.random().toString(36).slice(2)
-const nowISO = () => new Date().toISOString()
-const today  = () => new Date().toDateString()
+const LS_KEY = 'peerlearn-pro-state'
+const load = () => {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || null } catch { return null }
+}
+const persist = (state) => {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)) } catch {}
+}
 
-export const useStore = create((set, get) => ({
-  /* ---------------------- auth & profile state ---------------------- */
-  auth:    read('auth',    { authed:false, userId:null }),
-  profile: read('profile', { name:'', bio:'', tags:['react','finance'], theme:'dark', email:'', privacy:'pods' }),
-  otp: read('otp', { email:'', code:'', expiresAt:0, attemptsLeft:5, resendAt:0 }),
+const DEFAULT_PODS = [
+  'Consulting','Finance','Data Science','Marketing','Product Management','Operations','Strategy','HR','Analytics','Social Impact','EdTech','Banking','Investment','Entrepreneurship'
+].map((name, i)=>({
+  id: 'pod-'+(i+1), name, members: [], rules: 'Be kind. Specific pledges. Weekly proof.',
+  activity: Math.floor(Math.random()*8)+2, // posts/week
+  events: Math.random()>.5?1:0,
+  mentors: Math.random()>.5?['Stellar Mentor']:[],
+  feed: [
+    {id:'f1', type:'pledge', by:'Maya', text:'Finish 20 problems tonight', ts: Date.now()-36e5*6},
+    {id:'f2', type:'proof',  by:'Arjun', text:'Posted project summary', ts: Date.now()-36e5*2}
+  ]
+}))
 
-  // OTP requests/verify—supports your Auth.jsx
-  requestOTP: (email) => {
-    const code = '000000'          // dev code; swap with real mailer
-    const expiresAt = Date.now() + 5*60*1000
-    const resendAt  = Date.now() + 30*1000
-    const otp = { email, code, expiresAt, attemptsLeft:5, resendAt }
-    write('otp', otp)
-    const profile = { ...get().profile, email }
-    write('profile', profile)
-    set({ otp, profile })
+const defaultState = {
+  auth: { authed: false, email:'', verified:false },
+  profile: {
+    onboarded:false,
+    name:'', college:'', gradYear:'', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    headline:'', goals:['Product Management'], skills:['SQL','Excel'], availability:'Tue 7-8pm', linkedin:{ url:'', headline:'', skills:[], visible:{profile:true, pods:true, posts:false}},
+    privacy:{ journalsPrivate:true, allowAnon:true },
+    theme:'dark'
   },
-  verifyOTP: (input) => {
-    const { otp } = get()
-    if (!otp || !otp.email) return false
-    if (Date.now() > (otp.expiresAt || 0)) return false
-    if ((input || '').trim() !== otp.code) {
-      const attemptsLeft = Math.max(0, (otp.attemptsLeft || 0) - 1)
-      const next = { ...otp, attemptsLeft }
-      write('otp', next); set({ otp: next })
-      return false
-    }
-    const auth = { authed:true, userId: get().auth.userId || uid() }
-    write('auth', auth)
-    const cleared = { email:'', code:'', expiresAt:0, attemptsLeft:0, resendAt:0 }
-    write('otp', cleared)
-    set({ auth, otp: cleared })
-    return true
+  pods: { all: DEFAULT_PODS, joined: [] },
+  matches: { suggested: [], crews: [] },
+  journal: [],
+  events: [{id:'e1', title:'PM Resume Clinic', ts: Date.now()+86400000, host:'Stellar Mentor', pod:'Product Management', rsvps:0}],
+  townhall: [{id:'t1', type:'announcement', author:'Admin', text:'Welcome to PeerLearn!', ts: Date.now()-86400000}],
+  analytics: { streak:0, freezeArmed:false, freezeUsedThisWeek:false, retrieval:[] },
+  dms: { byThread: {} }
+}
+
+export const useStore = create((set, get)=>({
+  ... (load() || defaultState),
+
+  _persist: ()=>persist(get()),
+
+  // Auth
+  requestOTP: (email)=>{
+    set(s=>({auth:{...s.auth, email}})); get()._persist(); return '000000'; // static code for MVP
   },
-  signOut: () => set(() => { const a={authed:false, userId:null}; write('auth',a); return { auth:a } }),
+  verifyOTP: (code)=>{
+    const ok = code==='000000'
+    set(s=>({auth:{...s.auth, authed: ok, verified: ok}})); get()._persist(); return ok
+  },
+  signOut: ()=>{ set(()=>defaultState); get()._persist(); },
 
-  /* ------------------------ analytics & habits ----------------------- */
-  analytics: read('analytics', { streak:0, lastDay:today(), frozen:false, freezeArmed:false }),
-  markActive: () => set((state) => {
-    const d   = today()
-    let next = state.analytics.streak
-    if (state.analytics.lastDay !== d) {
-      const last  = new Date(state.analytics.lastDay).getTime()
-      const now   = new Date(d).getTime()
-      const cont  = last + 86400000 === now
-      next = cont ? next + 1 : 1
-    }
-    const analytics = { ...state.analytics, lastDay:d, streak:next }
-    write('analytics', analytics)
-    return { analytics }
-  }),
-  toggleFreeze: () => set((state) => {
-    const analytics = { ...state.analytics, frozen: !state.analytics.frozen, freezeArmed: !state.analytics.frozen }
-    write('analytics', analytics)
-    return { analytics }
-  }),
-
-  /* ------------------------------ pods ------------------------------- */
-  // Using pods.all[], pods.joined[] to match PodsDirectory/PodHome
-  pods: read('pods', {
-    all: [
-      { id:'p1', name:'Starter Pod', about:'Default pod', rules:['Be kind'], members:[], feed:[] }
-    ],
-    joined: []
-  }),
-  createPod: (name, about='') => set((s) => {
-    if (!name?.trim()) return {}
-    const pod = {
-      id: uid(),
-      name: name.trim(),
-      about: (about || '').trim(),
-      rules: [],
-      members: [get().me()?.id].filter(Boolean),
-      feed: []
-    }
-    const all = [...s.pods.all, pod]
-    const joined = [...new Set([...s.pods.joined, pod.id])]
-    const pods = { all, joined }
-    write('pods', pods)
-    return { pods }
-  }),
-  joinPod: (podId) => set((s) => {
-    const meId = get().me()?.id; if (!meId) return {}
-    const all = s.pods.all.map(p => p.id === podId ? { ...p, members:[...new Set([...(p.members || []), meId])] } : p)
-    const joined = [...new Set([...s.pods.joined, podId])]
-    const pods = { all, joined }
-    write('pods', pods)
-    return { pods }
-  }),
-  postToPod: (podId, msg) => set((s) => {
-    if (!msg?.trim()) return {}
-    const post = { id: uid(), user:get().me()?.name || 'Anon', msg: msg.trim(), at: nowISO() }
-    const all  = s.pods.all.map(p => p.id === podId ? { ...p, feed:[post, ...(p.feed || [])] } : p)
-    const pods = { ...s.pods, all }
-    write('pods', pods)
-    return { pods }
-  }),
-
-  /* ------------------------------ events ------------------------------ */
-  events: read('events', [
-    { id:'e1', title:'Welcome Session', ts:new Date(Date.now()+86400000).toISOString(), host:'System', pod:'p1' }
-  ]),
-  createEvent: (title, whenISO, podId=null) => set((s) => {
-    if (!title?.trim() || !whenISO) return {}
-    const podName = s.pods.all.find(p => p.id === podId)?.name || null
-    const e = {
-      id: uid(),
-      title: title.trim(),
-      ts: new Date(whenISO).toISOString(),
-      host: get().me()?.name || 'You',
-      pod: podId || podName || null
-    }
-    const events = [e, ...s.events]
-    write('events', events)
-    return { events }
-  }),
-  rsvp: (eventId, yes=true) => set((s) => {
-    const meId = get().me()?.id
-    const events = s.events.map(e => {
-      if (e.id !== eventId) return e
-      const going = new Set(e.going || [])
-      yes ? going.add(meId) : going.delete(meId)
-      return { ...e, going:[...going] }
-    })
-    write('events', events)
-    return { events }
-  }),
-
-  /* ---------------------------- journal ---------------------------- */
-  journal: read('journal', []),
-  addJournal: (date, mood, note, insight, sharedSummary=false) => set((s) => {
-    const entry = {
-      id: uid(),
-      date: date || nowISO(),
-      mood:(mood || '').trim(),
-      note:(note || '').trim(),
-      insight:(insight || '').trim(),
-      sharedSummary: Boolean(sharedSummary)
-    }
-    const journal = [entry, ...s.journal]
-    write('journal', journal)
-    return { journal }
-  }),
-  deleteJournal: (id) => set((s) => {
-    const journal = s.journal.filter(j => j.id !== id)
-    write('journal', journal)
-    return { journal }
-  }),
-
-  /* --------------------------- townhall --------------------------- */
-  townhall: read('townhall', [ { id:uid(), user:'System', msg:'Welcome to PeerLearn!', at: nowISO() } ]),
-  shout: (msg) => set((s) => {
-    if (!msg?.trim()) return {}
-    const m = { id: uid(), user:get().me()?.name || 'Anon', msg: msg.trim(), at: nowISO() }
-    const townhall = [m, ...s.townhall]
-    write('townhall', townhall)
-    return { townhall }
-  }),
-
-  /* ---------------------------- matches ---------------------------- */
-  matches: read('matches', { suggested:[], crews:[] }),
-  computeMatches: () => set((s) => {
-    const meId = get().me()?.id
-    // Suggest pods you’re not in:
-    const notJoined = s.pods.all.filter(p => !s.pods.joined.includes(p.id))
-    const suggested = notJoined.map((p,i) => ({
-      id:'sug-'+p.id,
-      title:`Join "${p.name}"`,
-      score: 0.6 - i*0.05,
-      type:'pod',
-      podId:p.id
-    }))
-    // For crews: pick up to 3 members from the first joined pod:
-    const first = s.pods.all.find(p => s.pods.joined.includes(p.id))
-    const crew = first ? (first.members || []).slice(0,3).map((id, i) => ({
-      id:'crew-'+i, name:`Peer ${String(id).slice(-4)}`, tags:['react','notes'], score:0.5-i*0.1
-    })) : []
-    const matches = { suggested, crews:crew }
-    write('matches', matches)
-    return { matches }
-  }),
-
-  /* ------------------------- helper for me() ------------------------ */
-  me() {
-    const { auth, profile } = get()
-    return auth.authed ? { id: auth.userId, name: profile.name || 'You' } : null
+  completeOnboarding: (patch)=>{
+    set(s=>({profile:{...s.profile, ...patch, onboarded:true}})); get()._persist();
   },
 
-  /* ------------------------- export/import/reset ------------------------ */
-  exportAll: () => {
-    const keys = ['auth','profile','otp','analytics','pods','events','journal','townhall','matches']
-    const obj  = Object.fromEntries(keys.map(k => [k, get()[k]]))
-    const blob = new Blob([JSON.stringify(obj, null, 2)],{ type:'application/json' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a'); a.href = url; a.download = 'peerlearn-backup.json'; a.click(); URL.revokeObjectURL(url)
+  // Pods
+  joinPod: (podId)=>{
+    set(s=>{
+      const pod = s.pods.all.find(p=>p.id===podId)
+      if (!pod) return {}
+      const joined = [...new Set([...s.pods.joined, podId])]
+      return { pods: {...s.pods, joined } }
+    }); get()._persist();
   },
-  importAll: async (file) => {
-    const text = await file.text(); let obj
-    try { obj = JSON.parse(text) } catch { alert('Invalid JSON'); return }
-    const allowed = ['auth','profile','otp','analytics','pods','events','journal','townhall','matches']
-    allowed.forEach(k => obj[k] !== undefined && write(k,obj[k]))
-    set(Object.fromEntries(allowed.map(k => [k, obj[k] ?? get()[k]])))
+  leavePod: (podId)=>{
+    set(s=>({ pods: {...s.pods, joined: s.pods.joined.filter(id=>id!==podId)} })); get()._persist();
   },
-  deleteAll: () => set(() => {
-    if (!confirm('Delete ALL local data?')) return {}
-    const cleared = {
-      auth:{ authed:false, userId:null },
-      profile:{ name:'', bio:'', tags:[], theme:'dark', email:'', privacy:'pods' },
-      otp:{ email:'', code:'', expiresAt:0, attemptsLeft:0, resendAt:0 },
-      analytics:{ streak:0, lastDay:today(), frozen:false, freezeArmed:false },
-      pods:{ all:[{ id:'p1', name:'Starter Pod', about:'Default pod', rules:['Be kind'], members:[], feed:[] }], joined:[] },
-      events:[{ id:'e1', title:'Welcome Session', ts:new Date(Date.now()+86400000).toISOString(), host:'System', pod:'p1' }],
-      journal:[],
-      townhall:[{ id:uid(), user:'System', msg:'Reset complete', at: nowISO() }],
-      matches:{ suggested:[], crews:[] }
+  postToPod: (podId, entry)=>{
+    set(s=>{
+      const all = s.pods.all.map(p=> p.id===podId ? {...p, feed:[...p.feed, {...entry, id:'f'+Date.now()}]} : p)
+      return { pods:{...s.pods, all} }
+    }); get()._persist();
+  },
+
+  // Journal
+  addJournal: (entry)=>{
+    set(s=>({ journal:[{...entry, id:'j'+Date.now()}, ...s.journal] })); get()._persist();
+  },
+
+  // Matching
+  computeMatches: ()=>{
+    const userSkills = (get().profile.skills||[]).map(s=>s.toLowerCase())
+    const candidates = get().pods.all.flatMap(p=> p.members.length? p.members : [{id:'u1', name:'Maya', skills:['excel','sql']},{id:'u2', name:'Arjun', skills:['python','stats']}])
+    const scored = candidates.map(c=>({
+      ...c, score: c.skills.filter(s=>userSkills.includes(s.toLowerCase())).length
+    })).sort((a,b)=>b.score-a.score)
+    set(()=>({ matches:{ suggested: scored.slice(0,3), crews:[['You', 'Maya', 'Arjun']] }}))
+    get()._persist()
+  },
+
+  // Events
+  rsvp: (eventId)=>{
+    set(s=>({ events: s.events.map(e=> e.id===eventId? {...e, rsvps:(e.rsvps||0)+1}:e)})); get()._persist();
+  },
+
+  // Analytics
+  markActive: ()=>{
+    const today = new Date().toISOString().slice(0,10)
+    const s = get().analytics
+    let newStreak = s.streak
+    if (s.lastActive === today) { /* no-op */ }
+    else if (!s.lastActive) newStreak = 1
+    else {
+      const diff = Math.round((new Date(today)-new Date(s.lastActive))/86400000)
+      if (diff===1) newStreak = s.streak+1
+      else if (diff>1 && s.freezeArmed && !s.freezeUsedThisWeek) { newStreak = s.streak+1; s.freezeArmed=false; s.freezeUsedThisWeek=true }
+      else newStreak = 1
     }
-    Object.keys(cleared).forEach(k => localStorage.removeItem(k))
-    return cleared
-  })
+    set(state=>({ analytics:{...state.analytics, lastActive: today, streak:newStreak }})); get()._persist();
+  },
+  toggleFreeze: ()=>{ set(s=>({ analytics:{...s.analytics, freezeArmed: !s.analytics.freezeArmed} })); get()._persist(); },
+
 }))
