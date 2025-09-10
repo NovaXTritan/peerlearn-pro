@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PeerLearn Pro</title>
+    <link rel="icon" href="/favicon.ico" />
+    <style>
+      /* Minimal reset & colors */
+      :root{--bg:#0b0b0c;--panel:#111214;--muted:#85868a;--text:#e7e7ea;--brand:#6EE7F2;}
+      html,body,#root{height:100%}
+      body{margin:0;background:#0b0b0c;color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;}
+      a{color:var(--brand);text-decoration:none}
+      input,textarea,select,button{font:inherit}
+      .btn{background:#e7e7ea;color:#111214;border:1px solid #333;padding:8px 10px;border-radius:10px;}
+      .btn.secondary{background:transparent;color:#e7e7ea;border:1px solid #3a3b3f}
+      .card{background:#111214;border:1px solid #232428;border-radius:16px;padding:16px}
+      .row{display:flex;gap:8px;align-items:center}
+      .col{display:flex;flex-direction:column;gap:8px}
+      .grid{display:grid;gap:12px}
+      .muted{color:var(--muted)}
+      .pill{padding:2px 8px;border-radius:999px;border:1px solid #333}
+      .field{background:#0f1012;border:1px solid #2a2b2f;border-radius:10px;padding:8px;color:#e7e7ea}
+      .table{width:100%;border-collapse:collapse}
+      .table th,.table td{padding:8px;border-bottom:1px solid #222}
+      .chip{border:1px solid #2a2b2f;border-radius:999px;padding:4px 8px}
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
