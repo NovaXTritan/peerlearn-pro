@@ -20,7 +20,7 @@ export function NavBar(){
   const authed = useStore(s=>s.auth.authed)
   const signOut = useStore(s=>s.signOut)
   return (
-    <div style={{position:'sticky', top:0, zIndex:10, background:'#0b0b0c', borderBottom:'1px solid #222'}}>
+    <div style={{position:'sticky', top:0, zIndex:50, background:'#0b0b0c', borderBottom:'1px solid #222'}}>
       <div style={{maxWidth:1100, margin:'0 auto', padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
         <div className="row">
           <Link to="/" style={{fontWeight:600}}>NovaXTritan</Link>
