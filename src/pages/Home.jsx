@@ -1,3 +1,4 @@
+import BlackHoleBG from '../components/BlackHoleBG.jsx'
 import React from 'react'
 import { useStore } from '../state/store.js'
 import { toast } from '../components/Toast.jsx'
