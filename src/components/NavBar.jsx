@@ -23,8 +23,8 @@ export function NavBar(){
     <div style={{position:'sticky', top:0, zIndex:10, background:'#0b0b0c', borderBottom:'1px solid #222'}}>
       <div style={{maxWidth:1100, margin:'0 auto', padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
         <div className="row">
-          <Link to="/" style={{fontWeight:600}}>🚀 PeerLearn</Link>
-          {authed && <span className="muted">Student network for growth</span>}
+          <Link to="/" style={{fontWeight:600}}>NovaXTritan</Link>
+          {authed && <span className="muted">The unexamined life is not worth living</span>}
         </div>
         <div className="row" style={{flexWrap:'wrap', gap:8}}>
           {authed && tabs.map(t=>{
