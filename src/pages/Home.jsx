@@ -80,3 +80,10 @@ function MoodQuick(){
     </div>
   )
 }
+<>
+  <BlackHoleBG enabled={true} quality="ultra" />
+  {/* Your existing content */}
+  <main style={{ position:'relative', zIndex:1, minHeight:'100svh', display:'grid', placeItems:'center', padding:'24px' }}>
+    {/* glass card / hero / buttons etc. */}
+  </main>
+</>
