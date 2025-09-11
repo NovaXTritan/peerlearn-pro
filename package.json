@@ -26,3 +26,9 @@
     "jsdom": "^25.0.0"
   }
 }
+{
+  "dependencies": {
+    "three": "^0.160.0"
+    // …keep your other deps
+  }
+}
