@@ -5,7 +5,7 @@ Student peer-learning MVP — ready for GitHub Pages.
 ## Quick start
 1. Create a **public repo** named **peerlearn-pro** on GitHub.
 2. Upload **all files** from this folder into the repo.
-3. Push to **main**  branch.
+3. Push to **main**  bra nch.
 4. GitHub Actions (included) builds and deploys automatically to **Pages**.
 5. Your site will be live at: `https://<your-username>.github.io/peerlearn-pro/`
 
