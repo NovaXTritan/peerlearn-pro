@@ -5,6 +5,7 @@ import App from './App.jsx'
 import './styles/theme.css'
 import { useStore } from './state/store.js'
 import { applyTheme } from './utils/theme.js'
+import './index.css'
 
 function Root(){
   // apply theme at startup and whenever it changes
